@@ -228,7 +228,7 @@ resource "google_project_iam_binding" "gcs" {
   project = "${data.google_project.project.id}"
   role    = "roles/storage.admin"
   members = [
-    "serviceAccount:${var.default_worker_sa}",
+    "serviceAccount:${data.google_project.project.number}-compute@developer.gserviceaccount.com",
   ]
 }
 

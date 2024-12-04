@@ -47,6 +47,7 @@ variable "region" {
 resource "google_project_service" "google-cloud-apis" {
   project = data.google_project.project.project_id 
   for_each = toset([
+    "cloudresourcemanager.googleapis.com"
     "aiplatform.googleapis.com",
     "servicenetworking.googleapis.com",
     "compute.googleapis.com",

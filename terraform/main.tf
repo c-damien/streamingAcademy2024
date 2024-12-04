@@ -43,11 +43,6 @@ variable "region" {
   default = "us-central1"
 }
 
-variable "default_worker_sa"{
-  type = string
-  default = "${data.google_project.project.number}-compute@developer.gserviceaccount.com"
-}
-
 ###activate APIs
 resource "google_project_service" "google-cloud-apis" {
   project = data.google_project.project.project_id 
@@ -204,7 +199,7 @@ resource "google_project_iam_binding" "vertex" {
   project = "${data.google_project.project.id}"
   role    = "roles/aiplatform.user"
   members = [
-    "serviceAccount:${var.default_worker_sa}",
+    "serviceAccount:${data.google_project.project.number}-compute@developer.gserviceaccount.com",
   ]
 }
 # Dataflow
@@ -212,21 +207,21 @@ resource "google_project_iam_binding" "df_worker" {
   project = "${data.google_project.project.id}"
   role    = "roles/dataflow.worker"
   members = [
-    "serviceAccount:${var.default_worker_sa}",
+    "serviceAccount:${data.google_project.project.number}-compute@developer.gserviceaccount.com",
   ]
 }
 resource "google_project_iam_binding" "df_admin" {
   project = "${data.google_project.project.id}"
   role    = "roles/dataflow.admin"
   members = [
-    "serviceAccount:${var.default_worker_sa}",
+    "serviceAccount:${data.google_project.project.number}-compute@developer.gserviceaccount.com",
   ]
 }
 resource "google_project_iam_binding" "pubsub" {
   project = "${data.google_project.project.id}"
   role    = "roles/pubsub.admin"
   members = [
-    "serviceAccount:${var.default_worker_sa}",
+    "serviceAccount:${data.google_project.project.number}-compute@developer.gserviceaccount.com",
   ]
 }
 resource "google_project_iam_binding" "gcs" {

@@ -25,7 +25,7 @@
 pip3 install -r requirements.txt
 
 python3 -m df_glucose_pipeline \
---project_id={project_id} \ 
+--project_id="{project_id}" \ 
 --region="us-central1" \
 --subnetwork_name="https://www.googleapis.com/compute/v1/projects/{project_id}/regions/us_central1/subnetworks/s-academy-us" \
 --staging_dir="gs://streamingacademy2024_{project.number}/dataflow/staging" \

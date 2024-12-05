@@ -28,6 +28,7 @@ from apache_beam.transforms.trigger import AccumulationMode, AfterCount, AfterAl
 
 from apache_beam.utils.timestamp import MAX_TIMESTAMP
 from apache_beam.utils.timestamp import Timestamp
+from apache_beam.utils.timestamp import Duration
 
 from apache_beam.options.pipeline_options import PipelineOptions
 from apache_beam.io import fileio
@@ -52,6 +53,7 @@ import argparse
 
 
 from google.cloud import storage
+import vertexai
 from vertexai.generative_models import (
     GenerationConfig,
     GenerativeModel,
@@ -223,17 +225,18 @@ def run():
             | "Read msg s1"   >> beam.io.ReadFromPubSub(subscription=INPUT_SUBSCRIPTION)
             | 'Parse Json s1' >> beam.Map(json.loads)
             | 'Adding ts s1'  >> beam.Map(lambda x: beam.window.TimestampedValue(x, datetime.fromisoformat(x['event_time']).timestamp()))
-            #| 'adding key' >> beam.Map(lambda x: (str(x['latitude'])[:6] + "_" + str(x['longitude'])[:8], x))
             | 'Read file s1'    >>  beam.ParDo(Load_data_from_gcs())
             | 'Adding elt ts s1' >> beam.Map(lambda x: beam.window.TimestampedValue(x, x['time'])) # solution
-            | 'Adding key s1' >> beam.WithKeys(lambda x: x[0])
-            #| 'distinct s1'  >>  beam.Distinct()
-            | "Reshuffle s1" >> beam.Reshuffle(num_buckets=1000) #solution
+            | "Reshuffle s1" >> beam.Reshuffle(num_buckets=1000)
+           )
             
            
             #| "Add id" >> beam.WithKeys(lambda x:  datetime.fromisoformat(x['event_time']))
             # beam.window.TimestampedValue
-        )
+         #| 'adding key' >> beam.Map(lambda x: (str(x['latitude'])[:6] + "_" + str(x['longitude'])[:8], x))
+            #| 'distinct s1'  >>  beam.Distinct()
+            #| "Reshuffle s1" >> beam.Reshuffle(num_buckets=1000) #solution
+
         
         #steps count per 5 mins
         stage2 = (
@@ -241,9 +244,7 @@ def run():
             | 'Window5min' >> beam.WindowInto(window.FixedWindows(300)) #5 mins
             | 'k,v conv s2' >> beam.Map(lambda x:(x['account'], x['steps_count'])) # solution to key
             | 'Aggr s2' >> beam.CombinePerKey(sum_elements) #solution using sum directly
-            | 'Window s2' >> beam.WindowInto(beam.window.FixedWindows(300), accumulation_mode=AccumulationMode.DISCARDING)
-         
-            #| 'output s2' >> beam.ParDo(print)
+            | 'Window s2' >> beam.WindowInto(beam.window.FixedWindows(300), allowed_lateness=Duration(seconds=300))
         )
         
         #average glucose
@@ -252,8 +253,7 @@ def run():
             | 'slidingWindow' >> beam.WindowInto(beam.window.SlidingWindows(size=900, period=300)) # 15 mins
             | 'k,v conv s3' >> beam.Map(lambda x:(x['account'], x['glucose_level'])) # solution to key
             | 'Aggr s3' >> beam.CombinePerKey(beam.combiners.MeanCombineFn()) #solution
-            | 'Window s3' >> beam.WindowInto(beam.window.FixedWindows(300), accumulation_mode=AccumulationMode.DISCARDING)
-            #| 'output s3' >> beam.ParDo(print)
+            | 'Window s3' >> beam.WindowInto(beam.window.FixedWindows(300), allowed_lateness=Duration(seconds=300))
         )
         
         #steps count per 10 mins
@@ -271,7 +271,6 @@ def run():
         stage5 = (({'steps': stage2, 'glucose': stage3})
             |'Merge stage 2 & 3' >> beam.CoGroupByKey()
             |'Call Gemini' >> beam.ParDo(CallVertexAIGeminiModel())
-            #| 'Windowing' >> beam.WindowInto(window.FixedWindows(60))
         )
         
         #save raw data to parquet

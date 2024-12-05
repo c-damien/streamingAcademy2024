@@ -22,16 +22,18 @@
 ####################################################################################
 
 #Update in the following statement elememnts in curly brackets after saving go to your console and launch bash df_glucose_launcher.sh
+pip3 install -r requirements.txt
+
 python3 -m df_glucose_pipeline \
---project_id {project_id} \ 
---region us-central1 \
---subnetwork_name https://www.googleapis.com/compute/v1/projects/streamingacademy2024/regions/us-central1/subnetworks/s-academy-us \
---staging_dir gs://streamingacademy2024_{project.number}/dataflow/staging \
---temp_dir gs://streamingacademy2024_{project.number}/dataflow/temp \
---gemini_model gemini-1.5-flash-002 \
---input_subscription projects/{project_id}/subscriptions/glucose_monitoring-sub \
---output_step_topic projects/{project_id}/topics/output_count_step \
---output_glucose_topic projects/{project_id}/topics/output_avg_glucose_level \
---output_table gs://{project_id}/output/my_table
+--project_id={project_id} \ 
+--region="us-central1" \
+--subnetwork_name="https://www.googleapis.com/compute/v1/projects/{project_id}/regions/us_central1/subnetworks/s-academy-us" \
+--staging_dir="gs://streamingacademy2024_{project.number}/dataflow/staging" \
+--temp_dir="gs://streamingacademy2024_{project.number}/dataflow/temp" \
+--gemini_model="gemini-1.5-flash-002" \
+--input_subscription="projects/{project_id}/subscriptions/glucose_monitoring-sub" \
+--output_step_topic="projects/{project_id}/topics/output_count_step" \
+--output_glucose_topic="projects/{project_id}/topics/output_avg_glucose_level" \
+--output_table="gs://{project_id}/output/my_table"
 
 

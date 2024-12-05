@@ -81,9 +81,15 @@ class generateMessages (Process):
                 match = re.match(pattern, f)
                 if match:
                     account_offset = match.group(1)
-                    account_id = str(self.threadID) + str(account_offset)
-                    self.sendToPubSub(account_id, f)
-                    time.sleep(60)
+                    pattern = r"records_\d+_\d+_(\d+)\.gz"  # Regex with capturing group
+                    match = re.match(pattern, f)
+                    if match:
+                        ts = int(match.group(1))
+                        current_ts = int(datetime.now().timestamp())// 60 * 60
+                        if ts >= current_ts and ts <= current_ts+ 180: #take only new data
+                            account_id = str(self.threadID) + str(account_offset)
+                            self.sendToPubSub(account_id, f)
+                            time.sleep(60)
 
         #total_samples = int(END_TIME/60 - START_TIME/60)
         #for account_offset in range(0, 1): # 200,000 customer
@@ -139,8 +145,8 @@ def main():
     i = 0
     file_list = list_files_in_subfolder(BUCKET_NAME, FOLDER_NAME)
     try:
-        for i in range(0, THREADS_COUNT, file_list):
-            p = generateMessages(i)
+        for i in range(0, THREADS_COUNT):
+            p = generateMessages(i, file_list)
             p.start()
             threads.append(p)
             i+=1

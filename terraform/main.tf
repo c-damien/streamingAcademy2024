@@ -47,15 +47,13 @@ variable "region" {
 resource "google_project_service" "google-cloud-apis" {
   project = data.google_project.project.project_id 
   for_each = toset([
-    "cloudresourcemanager.googleapis.com"
+    "cloudresourcemanager.googleapis.com",
     "aiplatform.googleapis.com",
     "servicenetworking.googleapis.com",
     "compute.googleapis.com",
     "dataflow.googleapis.com",
     "pubsub.googleapis.com",
     "storage-component.googleapis.com",
-    "google_workbench_instance"
-
   ])
   disable_dependent_services = true
   disable_on_destroy         = true
@@ -66,7 +64,7 @@ resource "google_project_service" "google-cloud-apis" {
 resource "google_compute_network" "main-vpc" {
   name                    = "streaming-academy-vpc"
   auto_create_subnetworks = false # Important: prevent auto-creation of subnets
- project                 = "your-gcp-project-id" 
+ project                 = data.google_project.project.project_id
 }
 
 ######## Create subnet
@@ -76,11 +74,31 @@ resource "google_compute_subnetwork" "main-subnet" {
   region        = "${var.region}"
   network       = google_compute_network.main-vpc.name
   project       = data.google_project.project.project_id
+  private_ip_google_access = true
 
-   depends_on = [
+  depends_on = [
     google_compute_network.main-vpc 
   ]
 }
+
+######## create a gce instance to get the default user
+resource "google_compute_instance" "default" {
+  name         = "dummy-instance"
+  machine_type = "e2-medium"
+  zone         = "us-central1-a"
+  project      = data.google_project.project.project_id
+
+  boot_disk {
+    initialize_params {
+      image = "debian-cloud/debian-12"
+    }
+  }
+
+  network_interface {
+    subnetwork = google_compute_subnetwork.main-subnet.name
+  }
+}
+
 
 ######## create pub/sub topics
 resource "google_pubsub_topic" "input_topic" {
@@ -137,8 +155,8 @@ resource "google_storage_bucket" "sa_bucket" {
 }
 
 ######## Create sub folders
-resource "google_storage_bucket_object" "folder_data" {
-  name          = "data/"
+resource "google_storage_bucket_object" "folder_dataflow" {
+  name          = "dataflow/"
   content       = "Not really a directory, but it's empty."
   bucket        = "${google_storage_bucket.sa_bucket.name}"
 
@@ -147,8 +165,8 @@ resource "google_storage_bucket_object" "folder_data" {
   ]
 }
 
-resource "google_storage_bucket_object" "folder_dataflow" {
-  name          = "dataflow"
+resource "google_storage_bucket_object" "folder_output" {
+  name          = "output/"
   content       = "Not really a directory, but it's empty."
   bucket        = "${google_storage_bucket.sa_bucket.name}"
 
@@ -158,7 +176,7 @@ resource "google_storage_bucket_object" "folder_dataflow" {
 }
 
 resource "google_storage_bucket_object" "folder_config" {
-  name          = "dataflow/config"
+  name          = "dataflow/config/"
   content       = "Not really a directory, but it's empty."
   bucket        = "${google_storage_bucket.sa_bucket.name}"
 
@@ -168,7 +186,7 @@ resource "google_storage_bucket_object" "folder_config" {
 }
 
 resource "google_storage_bucket_object" "folder_staging" {
-  name          = "dataflow/staging"
+  name          = "dataflow/staging/"
   content       = "Not really a directory, but it's empty."
   bucket        = "${google_storage_bucket.sa_bucket.name}"
   depends_on = [
@@ -176,21 +194,11 @@ resource "google_storage_bucket_object" "folder_staging" {
   ]
 }
 resource "google_storage_bucket_object" "folder_temp" {
-  name          = "dataflow/temp"
+  name          = "dataflow/temp/"
   content       = "Not really a directory, but it's empty."
   bucket        = "${google_storage_bucket.sa_bucket.name}"
   depends_on = [
     google_storage_bucket_object.folder_dataflow
-  ]
-}
-
-resource "google_storage_bucket_object" "folder_output" {
-  name          = "output"
-  content       = "Not really a directory, but it's empty."
-  bucket        = "${google_storage_bucket.sa_bucket.name}"
-
-  depends_on = [
-    google_storage_bucket.sa_bucket
   ]
 }
 
@@ -202,6 +210,9 @@ resource "google_project_iam_binding" "vertex" {
   members = [
     "serviceAccount:${data.google_project.project.number}-compute@developer.gserviceaccount.com",
   ]
+  depends_on = [
+    google_compute_instance.dummy
+  ]
 }
 # Dataflow
 resource "google_project_iam_binding" "df_worker" {
@@ -210,12 +221,18 @@ resource "google_project_iam_binding" "df_worker" {
   members = [
     "serviceAccount:${data.google_project.project.number}-compute@developer.gserviceaccount.com",
   ]
+  depends_on = [
+    google_compute_instance.dummy
+  ]
 }
 resource "google_project_iam_binding" "df_admin" {
   project = "${data.google_project.project.id}"
   role    = "roles/dataflow.admin"
   members = [
     "serviceAccount:${data.google_project.project.number}-compute@developer.gserviceaccount.com",
+  ]
+  depends_on = [
+    google_compute_instance.dummy
   ]
 }
 resource "google_project_iam_binding" "pubsub" {
@@ -224,6 +241,9 @@ resource "google_project_iam_binding" "pubsub" {
   members = [
     "serviceAccount:${data.google_project.project.number}-compute@developer.gserviceaccount.com",
   ]
+  depends_on = [
+    google_compute_instance.dummy
+  ]
 }
 resource "google_project_iam_binding" "gcs" {
   project = "${data.google_project.project.id}"
@@ -231,28 +251,7 @@ resource "google_project_iam_binding" "gcs" {
   members = [
     "serviceAccount:${data.google_project.project.number}-compute@developer.gserviceaccount.com",
   ]
+  depends_on = [
+    google_compute_instance.dummy
+  ]
 }
-
-######## download from github
-resource "null_resource" "get_from_github" {
-  provisioner "local-exec" {
-    command =  "git clone https://github.com/c-damien/gcp-public-demos"
-  }
-}
-
-
-
-
-
-
-
-### get roles
-#gcloud projects get-iam-policy "streamingacademy2024" \
-#--flatten="bindings[].members" \
-#--format='table(bindings.role)' \
-#--filter="bindings.members:781648616547-compute@developer.gserviceaccount.com"
-
-
-
-
-

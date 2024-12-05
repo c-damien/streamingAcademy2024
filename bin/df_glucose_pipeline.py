@@ -63,21 +63,6 @@ from vertexai.generative_models import (
     SafetySetting
 )
 
-##INPUT_TOPIC = "projects/streamingacademy2024/topics/glucose_monitoring"
-#INPUT_SUBSCRIPTION = "projects/streamingacademy2024/subscriptions/glucose_monitoring-sub"
-#OUTPUT_STEP_TOPIC = "projects/streamingacademy2024/topics/output_count_step"
-#OUTPUT_GLUCOSE_TOPIC = "projects/streamingacademy2024/topics/output_avg_glucose_level"
-
-#PROJECT_ID = "streamingacademy2024"
-#REGION = "us-central1"
-#MODEL =  "gemini-1.5-flash-002"
-##network: streaming-academy-vpc
-##subnet: s-academy-us
-#SUBNETWORK_NAME = "https://www.googleapis.com/compute/v1/projects/"+PROJECT_ID+"/regions/"+REGION+"/subnetworks/us-resources"
-#OUTPUT_TABLE = "gs://streamingacademy2024/output/my_table"
-#STAGING = "gs://streamingacademy2024/dataflow/staging"
-#TEMP = "gs://streamingacademy2024/dataflow/temp"
-
 logger= logging.getLogger('log')
 logger.setLevel(logging.INFO)
 ####################################################################################
@@ -111,7 +96,7 @@ class Load_data_from_gcs(beam.DoFn):
 
 def sum_elements(values):
     total = 0
-    for number in values: #solution use sum in python
+    for number in values:
         total += number
     return total
 
@@ -210,7 +195,6 @@ def run():
        requirements_file="requirements.txt",
        region=REGION,
        max_num_workers=4,
-       #machine_type="n1-highmem-4", #solution switch to n1-
        subnetwork=SUBNETWORK_NAME,
        dataflow_service_options=["enable_google_cloud_profiler"],
        experiments=["enable_data_sampling"],
@@ -218,7 +202,7 @@ def run():
        temp_location=TEMP
     )
 
-    with beam.Pipeline(DataflowRunner(), options=dataflow_options) as pipeline: #DataflowRunner #InteractiveRunner(),
+    with beam.Pipeline(DataflowRunner(), options=dataflow_options) as pipeline:
      
         stage1 = (
             pipeline
@@ -226,24 +210,16 @@ def run():
             | 'Parse Json s1' >> beam.Map(json.loads)
             | 'Adding ts s1'  >> beam.Map(lambda x: beam.window.TimestampedValue(x, datetime.fromisoformat(x['event_time']).timestamp()))
             | 'Read file s1'    >>  beam.ParDo(Load_data_from_gcs())
-            | 'Adding elt ts s1' >> beam.Map(lambda x: beam.window.TimestampedValue(x, x['time'])) # solution
+            | 'Adding elt ts s1' >> beam.Map(lambda x: beam.window.TimestampedValue(x, x['time']))
             | "Reshuffle s1" >> beam.Reshuffle(num_buckets=1000)
            )
             
-           
-            #| "Add id" >> beam.WithKeys(lambda x:  datetime.fromisoformat(x['event_time']))
-            # beam.window.TimestampedValue
-         #| 'adding key' >> beam.Map(lambda x: (str(x['latitude'])[:6] + "_" + str(x['longitude'])[:8], x))
-            #| 'distinct s1'  >>  beam.Distinct()
-            #| "Reshuffle s1" >> beam.Reshuffle(num_buckets=1000) #solution
-
-        
         #steps count per 5 mins
         stage2 = (
             stage1
             | 'Window5min' >> beam.WindowInto(window.FixedWindows(300)) #5 mins
-            | 'k,v conv s2' >> beam.Map(lambda x:(x['account'], x['steps_count'])) # solution to key
-            | 'Aggr s2' >> beam.CombinePerKey(sum_elements) #solution using sum directly
+            | 'k,v conv s2' >> beam.Map(lambda x:(x['account'], x['steps_count']))
+            | 'Aggr s2' >> beam.CombinePerKey(sum_elements) 
             | 'Window s2' >> beam.WindowInto(beam.window.FixedWindows(300), allowed_lateness=Duration(seconds=300))
         )
         
@@ -251,8 +227,8 @@ def run():
         stage3 = (
             stage1
             | 'slidingWindow' >> beam.WindowInto(beam.window.SlidingWindows(size=900, period=300)) # 15 mins
-            | 'k,v conv s3' >> beam.Map(lambda x:(x['account'], x['glucose_level'])) # solution to key
-            | 'Aggr s3' >> beam.CombinePerKey(beam.combiners.MeanCombineFn()) #solution
+            | 'k,v conv s3' >> beam.Map(lambda x:(x['account'], x['glucose_level']))
+            | 'Aggr s3' >> beam.CombinePerKey(beam.combiners.MeanCombineFn())
             | 'Window s3' >> beam.WindowInto(beam.window.FixedWindows(300), allowed_lateness=Duration(seconds=300))
         )
         
@@ -261,7 +237,7 @@ def run():
             stage1
             | 'Window10min' >> beam.WindowInto(window.FixedWindows(600)) #5 mins
             | 'k,v conv s4' >> beam.Map(lambda x:(x['account'], x['steps_count']))
-            | 'Aggr s4' >> beam.CombinePerKey(sum_elements) #solution using sum directly
+            | 'Aggr s4' >> beam.CombinePerKey(sum_elements)
             | 'prepare to send' >> beam.Map(lambda x:json.dumps({"account":x[0],"total_steps":x[1]}))
             | 'to json s4' >> beam.Map(lambda x:json.dumps(x).encode("utf-8"))
             | 'write to pub/sub 1' >> beam.io.WriteToPubSub(topic=OUTPUT_STEP_TOPIC)
@@ -279,12 +255,6 @@ def run():
                                   ('avg_glucose', pyarrow.float64()),
                                   ('recommendation', pyarrow.string())])
         
-        #stage6 =(stage5
-        #        | 'write all to parquet' >> beam.io.WriteToParquet(  
-        #        file_path_prefix= OUTPUT_TABLE, 
-        #        schema=schema,
-        #        num_shards=1)
-        #)
         
         #save aggregation to pub/sub
         stage7 = (stage5

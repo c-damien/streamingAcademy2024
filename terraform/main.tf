@@ -82,7 +82,7 @@ resource "google_compute_subnetwork" "main-subnet" {
 }
 
 ######## create a gce instance to get the default user
-resource "google_compute_instance" "default" {
+resource "google_compute_instance" "dummy" {
   name         = "dummy-instance"
   machine_type = "e2-medium"
   zone         = "us-central1-a"
